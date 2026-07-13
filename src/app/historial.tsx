@@ -24,13 +24,15 @@ export default function Historial() {
 };
 
   const cargar = async () => {
-    const { data, error } = await supabase
-      .from('calificaciones')
-      .select('*')
-      .order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('calificaciones')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    if (!error && data) setCalificaciones(data);
-  };
+  console.log('HISTORIAL - data:', data?.length, 'error:', error);
+
+  if (!error && data) setCalificaciones(data);
+};
 
   useFocusEffect(useCallback(() => { cargar(); }, []));
 
