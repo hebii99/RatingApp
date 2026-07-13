@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "RatingApp",
-    "slug": "RatingApp",
+    "slug": "ratingapp-m7tr4x",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -17,7 +17,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.hebii99sorganization.ratingappm7tr4x"
     },
     "web": {
       "output": "static",
@@ -34,11 +35,22 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-image",
+      "expo-font",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "40d5cab4-cf25-4688-8f6e-8ca27e0db5b2"
+      }
+    },
+    "owner": "hebii99s-organization"
   }
 }
