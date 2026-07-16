@@ -44,18 +44,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    let yaResolvio = false;
+
+    // Tope de seguridad: si getSession() se cuelga en el arranque en frío
+    // (algo conocido que puede pasar con AsyncStorage), no dejamos el
+    // spinner girando para siempre. A los 5s seguimos como si no hubiera
+    // sesión; si en realidad sí había una, onAuthStateChange la corrige sola.
+    const timeout = setTimeout(() => {
+      if (yaResolvio) return;
+      console.warn('AUTH - getSession no respondió en 5s, sigo sin sesión');
+      yaResolvio = true;
+      setLoading(false);
+    }, 5000);
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (yaResolvio) return; // ya se venció el timeout, dejamos que onAuthStateChange maneje esto
+      yaResolvio = true;
+      clearTimeout(timeout);
       setSession(session);
       await checkProfile(session);
+      setLoading(false);
+    }).catch((err) => {
+      console.error('AUTH - error en getSession:', err);
+      if (yaResolvio) return;
+      yaResolvio = true;
+      clearTimeout(timeout);
       setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       await checkProfile(session);
+      setLoading(false);
     });
 
     return () => {
+      clearTimeout(timeout);
       listener.subscription.unsubscribe();
     };
   }, []);

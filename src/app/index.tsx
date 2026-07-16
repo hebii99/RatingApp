@@ -15,7 +15,8 @@ export default function Index() {
   const [direccion, setDireccion] = useState('');
   const [acceso, setAcceso] = useState('');
   const [trato, setTrato] = useState('');
-  const [propina, setPropina] = useState('');
+  // Reemplaza al viejo selector Sí/No/A veces: si queda vacío, no hubo propina.
+  const [montoPropina, setMontoPropina] = useState('');
   const [seguridad, setSeguridad] = useState(0);
   const [peso, setPeso] = useState('');
   const [repetir, setRepetir] = useState('');
@@ -25,7 +26,6 @@ export default function Index() {
 
   const opcionesAcceso = ['Fácil', 'Difícil', 'Sin ascensor', 'Portero'];
   const opcionesTrato = ['Muy bueno', 'Bueno', 'Normal', 'Malo', 'Muy malo'];
-  const opcionesPropina = ['Sí', 'No', 'A veces'];
   const opcionesPeso = ['Liviano', 'Medio', 'Pesado'];
   const opcionesRepetir = ['Sí', 'No', 'Me da igual'];
 
@@ -61,7 +61,7 @@ export default function Index() {
     setDireccion('');
     setAcceso('');
     setTrato('');
-    setPropina('');
+    setMontoPropina('');
     setSeguridad(0);
     setPeso('');
     setRepetir('');
@@ -82,13 +82,24 @@ export default function Index() {
       return;
     }
 
+    // La propina es opcional: si escribió algo, tiene que ser un entero > 0.
+    let montoPropinaNumero: number | null = null;
+    if (montoPropina.trim()) {
+      const parseado = parseInt(montoPropina, 10);
+      if (isNaN(parseado) || parseado <= 0) {
+        Alert.alert('Propina inválida', 'Ingresá un número entero mayor a 0, o dejalo vacío si no hubo propina');
+        return;
+      }
+      montoPropinaNumero = parseado;
+    }
+
     setGuardando(true);
 
     const { error } = await supabase.from('calificaciones').insert({
     direccion,
     acceso,
     trato,
-    propina,
+    monto_propina: montoPropinaNumero,
     seguridad,
     peso,
     repetir,
@@ -134,8 +145,15 @@ export default function Index() {
       <Text style={styles.label}>Trato del cliente</Text>
       <Selector opciones={opcionesTrato} valor={trato} onChange={setTrato} />
 
-      <Text style={styles.label}>Propina</Text>
-      <Selector opciones={opcionesPropina} valor={propina} onChange={setPropina} />
+      <Text style={styles.label}>Propina (opcional)</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Ej: 300 — dejalo vacío si no hubo propina"
+        placeholderTextColor="#666"
+        value={montoPropina}
+        onChangeText={setMontoPropina}
+        keyboardType="numeric"
+      />
 
       <Text style={styles.label}>Seguridad de la zona</Text>
       <Estrellas valor={seguridad} onChange={setSeguridad} />

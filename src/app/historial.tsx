@@ -101,7 +101,11 @@ export default function Historial() {
           <View style={styles.tags}>
             {c.acceso ? <Text style={styles.tag}>{c.acceso}</Text> : null}
             {c.trato ? <Text style={styles.tag}>{c.trato}</Text> : null}
-            {c.propina ? <Text style={styles.tag}>Propina: {c.propina}</Text> : null}
+            {c.monto_propina ? (
+              <Text style={styles.tag}>💰 Propina: ${c.monto_propina}</Text>
+            ) : c.propina ? (
+              <Text style={styles.tag}>Propina: {c.propina}</Text>
+            ) : null}
             {c.peso ? <Text style={styles.tag}>{c.peso}</Text> : null}
             {c.repetir ? <Text style={styles.tag}>¿Repetir? {c.repetir}</Text> : null}
           </View>

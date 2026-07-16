@@ -27,6 +27,11 @@ export default function AppTabs() {
           renderingMode="template"
         />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="mis-entregas">
+        <NativeTabs.Trigger.Label>Mis entregas</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="shippingbox.fill" md="local_shipping" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
