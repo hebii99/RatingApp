@@ -1,4 +1,5 @@
-import { useAuth } from '@/contexts/AuthContext';
+import { AjustesModal } from '@/components/ajustes-modal';
+import { Colores, useTema } from '@/contexts/TemaContext';
 import { supabase } from '@/lib/supabase';
 import { useState } from 'react';
 import {
@@ -11,7 +12,9 @@ import {
 } from 'react-native';
 
 export default function Index() {
-  const { signOut } = useAuth();
+  const { colores } = useTema();
+  const styles = crearEstilos(colores);
+  const [ajustesVisible, setAjustesVisible] = useState(false);
   const [direccion, setDireccion] = useState('');
   const [acceso, setAcceso] = useState('');
   const [trato, setTrato] = useState('');
@@ -124,17 +127,19 @@ export default function Index() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerRow}>
-  <Text style={styles.titulo}>Califica la entrega</Text>
-  <TouchableOpacity onPress={signOut} style={styles.logoutButton}>
-    <Text style={styles.logoutText}>Salir</Text>
-  </TouchableOpacity>
-</View>
+        <Text style={styles.titulo}>Califica la entrega</Text>
+        <TouchableOpacity onPress={() => setAjustesVisible(true)} style={styles.engranajeBoton}>
+          <Text style={styles.engranajeTexto}>⚙️</Text>
+        </TouchableOpacity>
+      </View>
+
+      <AjustesModal visible={ajustesVisible} onClose={() => setAjustesVisible(false)} />
 
       <Text style={styles.label}>Dirección *</Text>
       <TextInput
         style={styles.input}
         placeholder="Ej: Av. Siempre Viva 123"
-        placeholderTextColor="#666"
+        placeholderTextColor={colores.textoSecundario}
         value={direccion}
         onChangeText={setDireccion}
       />
@@ -149,7 +154,7 @@ export default function Index() {
       <TextInput
         style={styles.input}
         placeholder="Ej: 300 — dejalo vacío si no hubo propina"
-        placeholderTextColor="#666"
+        placeholderTextColor={colores.textoSecundario}
         value={montoPropina}
         onChangeText={setMontoPropina}
         keyboardType="numeric"
@@ -168,7 +173,7 @@ export default function Index() {
       <TextInput
         style={[styles.input, styles.inputMultiline]}
         placeholder="Detalles adicionales..."
-        placeholderTextColor="#666"
+        placeholderTextColor={colores.textoSecundario}
         value={comentario}
         onChangeText={setComentario}
         multiline
@@ -195,46 +200,47 @@ export default function Index() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111', padding: 20, paddingTop: 60 },
-  titulo: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
-  headerRow: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: 24,
-},
-logoutButton: {
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  borderRadius: 8,
-  borderWidth: 1,
-  borderColor: '#444',
-},
-logoutText: {
-  color: '#aaa',
-  fontSize: 13,
-},
-  label: { color: '#aaa', fontSize: 13, marginBottom: 8, marginTop: 16 },
-  input: {
-    backgroundColor: '#1e1e1e', color: '#fff', borderRadius: 8,
-    padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#333'
-  },
-  inputMultiline: { height: 80, textAlignVertical: 'top' },
-  selectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1, borderColor: '#444', backgroundColor: '#1e1e1e'
-  },
-  chipActivo: { backgroundColor: '#e53e3e', borderColor: '#e53e3e' },
-  chipText: { color: '#aaa', fontSize: 13 },
-  chipTextActivo: { color: '#fff', fontWeight: 'bold' },
-  estrella: { fontSize: 36, color: '#444', marginRight: 4 },
-  estrellaActiva: { color: '#e53e3e' },
-  boton: {
-    backgroundColor: '#e53e3e', padding: 16, borderRadius: 10,
-    alignItems: 'center', marginTop: 32
-  },
-  botonDesactivado: { backgroundColor: '#666' },
-  botonTexto: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-});
+function crearEstilos(colores: Colores) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo, padding: 20, paddingTop: 60 },
+    titulo: { fontSize: 24, fontWeight: 'bold', color: colores.texto },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    engranajeBoton: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colores.borde,
+    },
+    engranajeTexto: {
+      fontSize: 18,
+    },
+    label: { color: colores.textoSecundario, fontSize: 13, marginBottom: 8, marginTop: 16 },
+    input: {
+      backgroundColor: colores.tarjeta, color: colores.texto, borderRadius: 8,
+      padding: 12, fontSize: 15, borderWidth: 1, borderColor: colores.borde
+    },
+    inputMultiline: { height: 80, textAlignVertical: 'top' },
+    selectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: {
+      paddingHorizontal: 12, paddingVertical: 6,
+      borderRadius: 20, borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.tarjeta
+    },
+    chipActivo: { backgroundColor: colores.acento, borderColor: colores.acento },
+    chipText: { color: colores.textoSecundario, fontSize: 13 },
+    chipTextActivo: { color: '#fff', fontWeight: 'bold' },
+    estrella: { fontSize: 36, color: colores.borde, marginRight: 4 },
+    estrellaActiva: { color: colores.acento },
+    boton: {
+      backgroundColor: colores.acento, padding: 16, borderRadius: 10,
+      alignItems: 'center', marginTop: 32
+    },
+    botonDesactivado: { backgroundColor: '#666' },
+    botonTexto: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  });
+}

@@ -1,3 +1,4 @@
+import { Colores, useTema } from '@/contexts/TemaContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,6 +15,8 @@ import {
 const POR_PAGINA = 7;
 
 export default function Historial() {
+  const { colores } = useTema();
+  const styles = crearEstilos(colores);
   const [calificaciones, setCalificaciones] = useState<any[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(0);
@@ -80,7 +83,7 @@ export default function Historial() {
       <TextInput
         style={styles.buscador}
         placeholder="Buscar dirección..."
-        placeholderTextColor="#666"
+        placeholderTextColor={colores.textoSecundario}
         value={busqueda}
         onChangeText={setBusqueda}
       />
@@ -155,44 +158,46 @@ export default function Historial() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111', padding: 20, paddingTop: 60 },
-  titulo: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 24 },
-  vacio: { color: '#666', textAlign: 'center', marginTop: 60, fontSize: 16 },
-  buscador: {
-    backgroundColor: '#1e1e1e', color: '#fff', borderRadius: 8,
-    padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#333',
-    marginBottom: 20
-  },
-  card: {
-    backgroundColor: '#1e1e1e', borderRadius: 12, padding: 16,
-    marginBottom: 16, borderWidth: 1, borderColor: '#333'
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  direccion: { color: '#fff', fontWeight: 'bold', fontSize: 15, flex: 1 },
-  fecha: { color: '#666', fontSize: 12 },
-  estrellas: { color: '#e53e3e', fontSize: 22, marginBottom: 10 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  tag: {
-    backgroundColor: '#2a2a2a', color: '#aaa', fontSize: 12,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12
-  },
-  seguridad: { color: '#aaa', fontSize: 13, marginBottom: 6 },
-  comentario: { color: '#bbb', fontSize: 13, marginTop: 6, fontStyle: 'italic' },
-  botonEliminar: {
-    marginTop: 12, padding: 8, borderRadius: 8,
-    borderWidth: 1, borderColor: '#e53e3e', alignItems: 'center'
-  },
-  botonEliminarTexto: { color: '#e53e3e', fontSize: 13 },
-  paginacion: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginTop: 8, marginBottom: 8,
-  },
-  botonPagina: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    borderWidth: 1, borderColor: '#444',
-  },
-  botonPaginaDesactivado: { opacity: 0.3 },
-  botonPaginaTexto: { color: '#ccc', fontSize: 13, fontWeight: '600' },
-  paginaTexto: { color: '#888', fontSize: 13 },
-});
+function crearEstilos(colores: Colores) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo, padding: 20, paddingTop: 60 },
+    titulo: { fontSize: 24, fontWeight: 'bold', color: colores.texto, marginBottom: 24 },
+    vacio: { color: colores.textoSecundario, textAlign: 'center', marginTop: 60, fontSize: 16 },
+    buscador: {
+      backgroundColor: colores.tarjeta, color: colores.texto, borderRadius: 8,
+      padding: 12, fontSize: 15, borderWidth: 1, borderColor: colores.borde,
+      marginBottom: 20
+    },
+    card: {
+      backgroundColor: colores.tarjeta, borderRadius: 12, padding: 16,
+      marginBottom: 16, borderWidth: 1, borderColor: colores.borde
+    },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    direccion: { color: colores.texto, fontWeight: 'bold', fontSize: 15, flex: 1 },
+    fecha: { color: colores.textoSecundario, fontSize: 12 },
+    estrellas: { color: colores.acento, fontSize: 22, marginBottom: 10 },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+    tag: {
+      backgroundColor: colores.borde, color: colores.textoSecundario, fontSize: 12,
+      paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12
+    },
+    seguridad: { color: colores.textoSecundario, fontSize: 13, marginBottom: 6 },
+    comentario: { color: colores.textoSecundario, fontSize: 13, marginTop: 6, fontStyle: 'italic' },
+    botonEliminar: {
+      marginTop: 12, padding: 8, borderRadius: 8,
+      borderWidth: 1, borderColor: colores.acento, alignItems: 'center'
+    },
+    botonEliminarTexto: { color: colores.acento, fontSize: 13 },
+    paginacion: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginTop: 8, marginBottom: 8,
+    },
+    botonPagina: {
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
+      borderWidth: 1, borderColor: colores.borde,
+    },
+    botonPaginaDesactivado: { opacity: 0.3 },
+    botonPaginaTexto: { color: colores.textoSecundario, fontSize: 13, fontWeight: '600' },
+    paginaTexto: { color: colores.textoSecundario, fontSize: 13 },
+  });
+}

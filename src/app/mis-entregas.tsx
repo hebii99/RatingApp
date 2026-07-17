@@ -1,13 +1,14 @@
+import { Colores, useTema } from '@/contexts/TemaContext';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 
 // Argentina está en UTC-3 todo el año (no tiene horario de verano).
@@ -33,6 +34,8 @@ function obtenerLimitesHoyArgentina() {
 }
 
 export default function MisEntregas() {
+  const { colores } = useTema();
+  const styles = crearEstilos(colores);
   const [cantidad, setCantidad] = useState<number | null>(null);
   const [totalPropinas, setTotalPropinas] = useState<number | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -73,7 +76,7 @@ export default function MisEntregas() {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refrescando} onRefresh={onRefresh} tintColor="#e53e3e" />
+        <RefreshControl refreshing={refrescando} onRefresh={onRefresh} tintColor={colores.acento} />
       }
     >
       <Text style={styles.titulo}>Mis entregas</Text>
@@ -81,7 +84,7 @@ export default function MisEntregas() {
 
       <View style={styles.card}>
         {cargando ? (
-          <ActivityIndicator size="large" color="#e53e3e" />
+          <ActivityIndicator size="large" color={colores.acento} />
         ) : (
           <>
             <Text style={styles.numero}>{cantidad}</Text>
@@ -96,7 +99,7 @@ export default function MisEntregas() {
 
       <View style={styles.card}>
         {cargando ? (
-          <ActivityIndicator size="large" color="#e53e3e" />
+          <ActivityIndicator size="large" color={colores.acento} />
         ) : (
           <>
             <Text style={styles.numero}>${totalPropinas ?? 0}</Text>
@@ -110,16 +113,18 @@ export default function MisEntregas() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111', padding: 20, paddingTop: 60 },
-  titulo: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
-  tituloSeccion: { marginTop: 28, fontSize: 18 },
-  subtitulo: { fontSize: 13, color: '#666', marginBottom: 24 },
-  card: {
-    backgroundColor: '#1e1e1e', borderRadius: 16, padding: 32,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#333', minHeight: 160, marginTop: 12
-  },
-  numero: { fontSize: 56, fontWeight: 'bold', color: '#e53e3e' },
-  numeroLabel: { fontSize: 14, color: '#aaa', marginTop: 8 },
-});
+function crearEstilos(colores: Colores) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo, padding: 20, paddingTop: 60 },
+    titulo: { fontSize: 24, fontWeight: 'bold', color: colores.texto, marginBottom: 4 },
+    tituloSeccion: { marginTop: 28, fontSize: 18 },
+    subtitulo: { fontSize: 13, color: colores.textoSecundario, marginBottom: 24 },
+    card: {
+      backgroundColor: colores.tarjeta, borderRadius: 16, padding: 32,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: colores.borde, minHeight: 160, marginTop: 12
+    },
+    numero: { fontSize: 56, fontWeight: 'bold', color: colores.acento },
+    numeroLabel: { fontSize: 14, color: colores.textoSecundario, marginTop: 8 },
+  });
+}
