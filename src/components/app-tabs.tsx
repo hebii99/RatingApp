@@ -30,6 +30,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Mis entregas</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="shippingbox.fill" md="local_shipping" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="finanzas">
+        <NativeTabs.Trigger.Label>Finanzas</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="dollarsign.circle.fill" md="attach_money" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

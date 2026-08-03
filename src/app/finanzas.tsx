@@ -1,0 +1,350 @@
+import { Colores, useTema } from '@/contexts/TemaContext';
+import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+
+// Argentina está en UTC-3 todo el año (no tiene horario de verano).
+const OFFSET_ARGENTINA_HORAS = 3;
+
+// Calcula el rango del mes en curso (día 1 00:00 a fin de mes 23:59:59
+// hora Argentina), expresado en los mismos valores que Postgres guarda
+// en `created_at` (en UTC, sin marca de zona horaria).
+function obtenerLimitesMesArgentina() {
+  const ahora = new Date();
+  const argentinaAhora = new Date(ahora.getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
+
+  const anio = argentinaAhora.getUTCFullYear();
+  const mes = argentinaAhora.getUTCMonth();
+
+  // Medianoche del día 1 en Argentina = 03:00 UTC del mismo día.
+  const inicio = new Date(Date.UTC(anio, mes, 1, OFFSET_ARGENTINA_HORAS, 0, 0));
+  // Medianoche del día 1 del mes siguiente en Argentina.
+  const fin = new Date(Date.UTC(anio, mes + 1, 1, OFFSET_ARGENTINA_HORAS, 0, 0));
+
+  return { inicio, fin };
+}
+
+// A qué día calendario (en Argentina) corresponde un created_at en UTC.
+// Sirve para contar días distintos trabajados sin depender del formato
+// de texto que tiene la columna `fecha` en calificaciones.
+function diaArgentina(fechaUTC: string) {
+  const fecha = new Date(new Date(fechaUTC).getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
+  return `${fecha.getUTCFullYear()}-${fecha.getUTCMonth()}-${fecha.getUTCDate()}`;
+}
+
+const CATEGORIAS = [
+  { clave: 'combustible', etiqueta: 'Combustible' },
+  { clave: 'aceite', etiqueta: 'Aceite' },
+  { clave: 'mecanico', etiqueta: 'Mecánico' },
+  { clave: 'seguro', etiqueta: 'Seguro' },
+  { clave: 'otros', etiqueta: 'Otros' },
+] as const;
+
+type Categoria = typeof CATEGORIAS[number]['clave'];
+
+interface Gasto {
+  id: string;
+  categoria: Categoria;
+  monto: number;
+  fecha: string;
+  nota: string | null;
+}
+
+function etiquetaCategoria(clave: string) {
+  return CATEGORIAS.find((c) => c.clave === clave)?.etiqueta ?? clave;
+}
+
+export default function Finanzas() {
+  const { colores } = useTema();
+  const styles = crearEstilos(colores);
+
+  const [cargando, setCargando] = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+
+  const [pedidosTotales, setPedidosTotales] = useState(0);
+  const [diasTrabajados, setDiasTrabajados] = useState(0);
+  const [gastos, setGastos] = useState<Gasto[]>([]);
+
+  const [categoriaElegida, setCategoriaElegida] = useState<Categoria>('combustible');
+  const [monto, setMonto] = useState('');
+  const [nota, setNota] = useState('');
+
+  const cargar = useCallback(async () => {
+    const { inicio, fin } = obtenerLimitesMesArgentina();
+
+    const [resultadoCalificaciones, resultadoGastos] = await Promise.all([
+      supabase
+        .from('calificaciones')
+        .select('created_at')
+        .gte('created_at', inicio.toISOString())
+        .lt('created_at', fin.toISOString()),
+      supabase
+        .from('gastos')
+        .select('id, categoria, monto, fecha, nota')
+        .gte('fecha', inicio.toISOString().slice(0, 10))
+        .lt('fecha', fin.toISOString().slice(0, 10))
+        .order('fecha', { ascending: false }),
+    ]);
+
+    if (!resultadoCalificaciones.error && resultadoCalificaciones.data) {
+      const filas = resultadoCalificaciones.data;
+      setPedidosTotales(filas.length);
+      const diasDistintos = new Set(filas.map((f) => diaArgentina(f.created_at)));
+      setDiasTrabajados(diasDistintos.size);
+    }
+
+    if (!resultadoGastos.error && resultadoGastos.data) {
+      setGastos(resultadoGastos.data as Gasto[]);
+    } else if (resultadoGastos.error) {
+      console.log('FINANZAS - error al traer gastos:', resultadoGastos.error);
+    }
+
+    setCargando(false);
+    setRefrescando(false);
+  }, []);
+
+  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+
+  const onRefresh = () => {
+    setRefrescando(true);
+    cargar();
+  };
+
+  const totalGastado = gastos.reduce((acc, g) => acc + g.monto, 0);
+
+  const totalesPorCategoria = CATEGORIAS.map((c) => ({
+    ...c,
+    total: gastos.filter((g) => g.categoria === c.clave).reduce((acc, g) => acc + g.monto, 0),
+  })).filter((c) => c.total > 0);
+
+  const eliminarGasto = (id: string) => {
+    Alert.alert('Eliminar', '¿Seguro que querés eliminar este gasto?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive', onPress: async () => {
+          await supabase.from('gastos').delete().eq('id', id);
+          cargar();
+        }
+      }
+    ]);
+  };
+
+  const guardarGasto = async () => {
+    const montoNumerico = Number(monto.replace(',', '.'));
+
+    if (!monto || Number.isNaN(montoNumerico) || montoNumerico <= 0) {
+      Alert.alert('Monto inválido', 'Ingresá un monto mayor a 0.');
+      return;
+    }
+
+    setGuardando(true);
+
+    const { error } = await supabase.from('gastos').insert({
+      categoria: categoriaElegida,
+      monto: montoNumerico,
+      nota: nota.trim() ? nota.trim() : null,
+    });
+
+    setGuardando(false);
+
+    if (error) {
+      console.log('FINANZAS - error al guardar gasto:', error);
+      Alert.alert('No se pudo guardar', 'Intentá de nuevo en un momento.');
+      return;
+    }
+
+    setMonto('');
+    setNota('');
+    cargar();
+  };
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refrescando} onRefresh={onRefresh} tintColor={colores.acento} />
+      }
+    >
+      <Text style={styles.titulo}>Finanzas</Text>
+      <Text style={styles.subtitulo}>Resumen del mes en curso</Text>
+
+      {cargando ? (
+        <View style={styles.card}>
+          <ActivityIndicator size="large" color={colores.acento} />
+        </View>
+      ) : (
+        <View style={styles.filaResumen}>
+          <View style={[styles.card, styles.cardResumen]}>
+            <Text style={styles.numero} numberOfLines={1} adjustsFontSizeToFit>${totalGastado}</Text>
+            <Text style={styles.numeroLabel}>gastado este mes</Text>
+          </View>
+          <View style={[styles.card, styles.cardResumen]}>
+            <Text style={styles.numero} numberOfLines={1} adjustsFontSizeToFit>{diasTrabajados}</Text>
+            <Text style={styles.numeroLabel}>días trabajados</Text>
+          </View>
+          <View style={[styles.card, styles.cardResumen]}>
+            <Text style={styles.numero} numberOfLines={1} adjustsFontSizeToFit>{pedidosTotales}</Text>
+            <Text style={styles.numeroLabel}>pedidos entregados</Text>
+          </View>
+        </View>
+      )}
+
+      <Text style={[styles.titulo, styles.tituloSeccion]}>Cargar gasto</Text>
+
+      <View style={styles.chips}>
+        {CATEGORIAS.map((c) => (
+          <TouchableOpacity
+            key={c.clave}
+            onPress={() => setCategoriaElegida(c.clave)}
+            style={[
+              styles.chip,
+              categoriaElegida === c.clave && { backgroundColor: colores.acento, borderColor: colores.acento },
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipTexto,
+                categoriaElegida === c.clave && { color: '#ffffff' },
+              ]}
+            >
+              {c.etiqueta}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Monto"
+        placeholderTextColor={colores.textoSecundario}
+        keyboardType="decimal-pad"
+        value={monto}
+        onChangeText={setMonto}
+      />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Nota (opcional)"
+        placeholderTextColor={colores.textoSecundario}
+        value={nota}
+        onChangeText={setNota}
+      />
+
+      <TouchableOpacity
+        style={styles.boton}
+        onPress={guardarGasto}
+        disabled={guardando}
+      >
+        {guardando ? (
+          <ActivityIndicator color="#ffffff" />
+        ) : (
+          <Text style={styles.botonTexto}>Guardar gasto</Text>
+        )}
+      </TouchableOpacity>
+
+      {totalesPorCategoria.length > 0 && (
+        <>
+          <Text style={[styles.titulo, styles.tituloSeccion]}>Por categoría</Text>
+          <View style={styles.card}>
+            {totalesPorCategoria.map((c) => (
+              <View key={c.clave} style={styles.filaCategoria}>
+                <Text style={styles.filaCategoriaTexto}>{c.etiqueta}</Text>
+                <Text style={styles.filaCategoriaMonto}>${c.total}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      <Text style={[styles.titulo, styles.tituloSeccion]}>Detalle de gastos</Text>
+
+      {gastos.length === 0 && !cargando ? (
+        <Text style={styles.subtitulo}>Todavía no cargaste gastos este mes.</Text>
+      ) : (
+        gastos.map((g) => (
+          <View key={g.id} style={styles.filaGasto}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.filaGastoCategoria}>{etiquetaCategoria(g.categoria)}</Text>
+              {g.nota ? <Text style={styles.filaGastoNota}>{g.nota}</Text> : null}
+              <Text style={styles.filaGastoFecha}>{g.fecha}</Text>
+            </View>
+            <View style={styles.filaGastoDerecha}>
+              <Text style={styles.filaGastoMonto}>${g.monto}</Text>
+              <TouchableOpacity style={styles.botonEliminar} onPress={() => eliminarGasto(g.id)}>
+                <Text style={styles.botonEliminarTexto}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))
+      )}
+
+      <View style={{ height: 60 }} />
+    </ScrollView>
+  );
+}
+
+function crearEstilos(colores: Colores) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo, padding: 20, paddingTop: 60 },
+    titulo: { fontSize: 24, fontWeight: 'bold', color: colores.texto, marginBottom: 4 },
+    tituloSeccion: { marginTop: 28, fontSize: 18 },
+    subtitulo: { fontSize: 13, color: colores.textoSecundario, marginBottom: 24 },
+    filaResumen: { flexDirection: 'row', gap: 10, marginTop: 12 },
+    card: {
+      backgroundColor: colores.tarjeta, borderRadius: 16, padding: 20,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: colores.borde, minHeight: 110,
+    },
+    cardResumen: { flex: 1, padding: 12 },
+    numero: { fontSize: 28, fontWeight: 'bold', color: colores.acento },
+    numeroLabel: { fontSize: 12, color: colores.textoSecundario, marginTop: 6, textAlign: 'center' },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+    chip: {
+      paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+      borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.tarjeta,
+    },
+    chipTexto: { color: colores.texto, fontSize: 14 },
+    input: {
+      backgroundColor: colores.tarjeta, borderRadius: 12, padding: 14, marginTop: 12,
+      borderWidth: 1, borderColor: colores.borde, color: colores.texto, fontSize: 15,
+    },
+    boton: {
+      backgroundColor: colores.acento, borderRadius: 12, padding: 16,
+      alignItems: 'center', marginTop: 16,
+    },
+    botonTexto: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+    filaCategoria: {
+      flexDirection: 'row', justifyContent: 'space-between', width: '100%',
+      paddingVertical: 8,
+    },
+    filaCategoriaTexto: { color: colores.texto, fontSize: 15 },
+    filaCategoriaMonto: { color: colores.acento, fontSize: 15, fontWeight: 'bold' },
+    filaGasto: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      backgroundColor: colores.tarjeta, borderRadius: 12, padding: 14, marginTop: 10,
+      borderWidth: 1, borderColor: colores.borde,
+    },
+    filaGastoCategoria: { color: colores.texto, fontSize: 15, fontWeight: 'bold' },
+    filaGastoNota: { color: colores.textoSecundario, fontSize: 13, marginTop: 2 },
+    filaGastoFecha: { color: colores.textoSecundario, fontSize: 12, marginTop: 4 },
+    filaGastoMonto: { color: colores.acento, fontSize: 16, fontWeight: 'bold' },
+    filaGastoDerecha: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    botonEliminar: {
+      width: 26, height: 26, borderRadius: 13,
+      borderWidth: 1, borderColor: colores.acento, alignItems: 'center', justifyContent: 'center'
+    },
+    botonEliminarTexto: { color: colores.acento, fontSize: 13, fontWeight: 'bold' },
+  });
+}

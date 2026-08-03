@@ -19,6 +19,7 @@ export default function Historial() {
   const styles = crearEstilos(colores);
   const [calificaciones, setCalificaciones] = useState<any[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const [filtroRepetir, setFiltroRepetir] = useState<'Todos' | 'Sí' | 'No' | 'Me da igual'>('Todos');
   const [pagina, setPagina] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -43,7 +44,7 @@ export default function Historial() {
   // "perdidos" en una página que ya no tiene resultados.
   useEffect(() => {
     setPagina(0);
-  }, [busqueda]);
+  }, [busqueda, filtroRepetir]);
 
   const eliminar = (id: string) => {
     Alert.alert('Eliminar', '¿Seguro que querés eliminar esta calificación?', [
@@ -64,6 +65,7 @@ export default function Historial() {
   );
 
   const filtradas = calificaciones.filter(c => {
+    if (filtroRepetir !== 'Todos' && c.repetir !== filtroRepetir) return false;
     if (!busqueda) return true;
     const regex = new RegExp(busqueda.replace(/\*/g, '.*'), 'i');
     return regex.test(c.direccion);
@@ -87,6 +89,23 @@ export default function Historial() {
         value={busqueda}
         onChangeText={setBusqueda}
       />
+
+      <View style={styles.chipsFiltro}>
+        {(['Todos', 'Sí', 'No', 'Me da igual'] as const).map((opcion) => (
+          <TouchableOpacity
+            key={opcion}
+            onPress={() => setFiltroRepetir(opcion)}
+            style={[
+              styles.chip,
+              filtroRepetir === opcion && { backgroundColor: colores.acento, borderColor: colores.acento },
+            ]}
+          >
+            <Text style={[styles.chipTexto, filtroRepetir === opcion && { color: '#ffffff' }]}>
+              {opcion}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {filtradas.length === 0 && (
         <Text style={styles.vacio}>No hay calificaciones guardadas</Text>
@@ -166,8 +185,19 @@ function crearEstilos(colores: Colores) {
     buscador: {
       backgroundColor: colores.tarjeta, color: colores.texto, borderRadius: 8,
       padding: 12, fontSize: 15, borderWidth: 1, borderColor: colores.borde,
+<<<<<<< HEAD
       marginBottom: 20
     },
+=======
+      marginBottom: 12
+    },
+    chipsFiltro: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+    chip: {
+      paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20,
+      borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.tarjeta,
+    },
+    chipTexto: { color: colores.texto, fontSize: 13 },
+>>>>>>> 8f14f8c (Agregar seccion Finanzas y filtro de repetir en historial)
     card: {
       backgroundColor: colores.tarjeta, borderRadius: 12, padding: 16,
       marginBottom: 16, borderWidth: 1, borderColor: colores.borde
