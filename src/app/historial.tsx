@@ -185,10 +185,6 @@ function crearEstilos(colores: Colores) {
     buscador: {
       backgroundColor: colores.tarjeta, color: colores.texto, borderRadius: 8,
       padding: 12, fontSize: 15, borderWidth: 1, borderColor: colores.borde,
-<<<<<<< HEAD
-      marginBottom: 20
-    },
-=======
       marginBottom: 12
     },
     chipsFiltro: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
@@ -197,7 +193,6 @@ function crearEstilos(colores: Colores) {
       borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.tarjeta,
     },
     chipTexto: { color: colores.texto, fontSize: 13 },
->>>>>>> 8f14f8c (Agregar seccion Finanzas y filtro de repetir en historial)
     card: {
       backgroundColor: colores.tarjeta, borderRadius: 12, padding: 16,
       marginBottom: 16, borderWidth: 1, borderColor: colores.borde
