@@ -16,20 +16,16 @@ export default function Index() {
   const styles = crearEstilos(colores);
   const [ajustesVisible, setAjustesVisible] = useState(false);
   const [direccion, setDireccion] = useState('');
-  const [acceso, setAcceso] = useState('');
   const [trato, setTrato] = useState('');
   // Reemplaza al viejo selector Sí/No/A veces: si queda vacío, no hubo propina.
   const [montoPropina, setMontoPropina] = useState('');
   const [seguridad, setSeguridad] = useState(0);
-  const [peso, setPeso] = useState('');
   const [repetir, setRepetir] = useState('');
   const [comentario, setComentario] = useState('');
   const [calificacion, setCalificacion] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
-  const opcionesAcceso = ['Fácil', 'Difícil', 'Sin ascensor', 'Portero'];
-  const opcionesTrato = ['Muy bueno', 'Bueno', 'Normal', 'Malo', 'Muy malo'];
-  const opcionesPeso = ['Liviano', 'Medio', 'Pesado'];
+  const opcionesTrato = ['Bueno', 'Normal', 'Malo'];
   const opcionesRepetir = ['Sí', 'No', 'Me da igual'];
 
   const Selector = ({ opciones, valor, onChange }: any) => (
@@ -62,11 +58,9 @@ export default function Index() {
 
   const limpiarFormulario = () => {
     setDireccion('');
-    setAcceso('');
     setTrato('');
     setMontoPropina('');
     setSeguridad(0);
-    setPeso('');
     setRepetir('');
     setComentario('');
     setCalificacion(0);
@@ -100,11 +94,9 @@ export default function Index() {
 
     const { error } = await supabase.from('calificaciones').insert({
     direccion,
-    acceso,
     trato,
     monto_propina: montoPropinaNumero,
     seguridad,
-    peso,
     repetir,
     comentario,
     calificacion,
@@ -144,9 +136,6 @@ export default function Index() {
         onChangeText={setDireccion}
       />
 
-      <Text style={styles.label}>Acceso</Text>
-      <Selector opciones={opcionesAcceso} valor={acceso} onChange={setAcceso} />
-
       <Text style={styles.label}>Trato del cliente</Text>
       <Selector opciones={opcionesTrato} valor={trato} onChange={setTrato} />
 
@@ -162,9 +151,6 @@ export default function Index() {
 
       <Text style={styles.label}>Seguridad de la zona</Text>
       <Estrellas valor={seguridad} onChange={setSeguridad} />
-
-      <Text style={styles.label}>Peso del pedido</Text>
-      <Selector opciones={opcionesPeso} valor={peso} onChange={setPeso} />
 
       <Text style={styles.label}>¿Repetirías?</Text>
       <Selector opciones={opcionesRepetir} valor={repetir} onChange={setRepetir} />
@@ -182,8 +168,6 @@ export default function Index() {
 
       <Text style={styles.label}>Calificación general</Text>
       <Estrellas valor={calificacion} onChange={setCalificacion} />
-
-      <Text style={styles.label}>Semana</Text>
 
       <TouchableOpacity
         style={[styles.boton, guardando && styles.botonDesactivado]}
