@@ -46,6 +46,12 @@ function diaArgentina(fechaUTC: string) {
   return `${fecha.getUTCFullYear()}-${fecha.getUTCMonth()}-${fecha.getUTCDate()}`;
 }
 
+// Redondea a 2 decimales — evita el clásico error de punto flotante de JS
+// (ej: 0.1 + 0.2 = 0.30000000000000004) al sumar montos con centavos.
+function redondear2(numero: number) {
+  return Math.round((numero + Number.EPSILON) * 100) / 100;
+}
+
 const CATEGORIAS = [
   { clave: 'combustible', etiqueta: 'Combustible' },
   { clave: 'aceite', etiqueta: 'Aceite' },
@@ -178,15 +184,15 @@ export default function Finanzas() {
     cargar();
   };
 
-  const totalGastado = gastos.reduce((acc, g) => acc + g.monto, 0);
-  const totalIngresado = ingresos.reduce((acc, i) => acc + i.monto, 0);
-  const totalKmRecorridos = kilometros.reduce(
+  const totalGastado = redondear2(gastos.reduce((acc, g) => acc + g.monto, 0));
+  const totalIngresado = redondear2(ingresos.reduce((acc, i) => acc + i.monto, 0));
+  const totalKmRecorridos = redondear2(kilometros.reduce(
     (acc, k) => acc + (k.km_fin != null ? k.km_fin - k.km_inicio : 0), 0
-  );
+  ));
 
   const totalesPorCategoria = CATEGORIAS.map((c) => ({
     ...c,
-    total: gastos.filter((g) => g.categoria === c.clave).reduce((acc, g) => acc + g.monto, 0),
+    total: redondear2(gastos.filter((g) => g.categoria === c.clave).reduce((acc, g) => acc + g.monto, 0)),
   })).filter((c) => c.total > 0);
 
   const eliminarGasto = (id: string) => {
@@ -303,7 +309,7 @@ export default function Finanzas() {
   };
 
   const gastoPorCategoria = (clave: Categoria) =>
-    gastos.filter((g) => g.categoria === clave).reduce((acc, g) => acc + g.monto, 0);
+    redondear2(gastos.filter((g) => g.categoria === clave).reduce((acc, g) => acc + g.monto, 0));
 
   const exportarMes = async () => {
     setExportando(true);
@@ -313,7 +319,7 @@ export default function Finanzas() {
       const etiquetaMesCruda = argentinaAhora.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
       const etiquetaMes = etiquetaMesCruda.charAt(0).toUpperCase() + etiquetaMesCruda.slice(1);
 
-      const neto = totalIngresado - totalGastado;
+      const neto = redondear2(totalIngresado - totalGastado);
       const promedioPorPedido = pedidosTotales > 0 ? Math.round(totalIngresado / pedidosTotales) : 0;
       const promedioPorDia = diasTrabajados > 0 ? Math.round(totalIngresado / diasTrabajados) : 0;
 
