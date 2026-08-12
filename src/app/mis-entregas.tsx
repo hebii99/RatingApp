@@ -139,9 +139,13 @@ export default function MisEntregas() {
 
     setGuardandoKm(true);
 
+    // Acá siempre existe una fila (km_inicio ya está cargado), así que
+    // actualizamos en vez de upsert: un upsert con solo km_fin fallaría
+    // por la restricción not null de km_inicio al construir la fila.
     const { error } = await supabase
       .from('kilometros')
-      .upsert({ km_fin: kmNumerico, fecha: hoyArgentina() }, { onConflict: 'user_id,fecha' });
+      .update({ km_fin: kmNumerico })
+      .eq('fecha', hoyArgentina());
 
     setGuardandoKm(false);
 
