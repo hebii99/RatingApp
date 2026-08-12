@@ -158,6 +158,22 @@ export default function MisEntregas() {
     cargar();
   };
 
+  const reiniciarKmHoy = () => {
+    Alert.alert(
+      'Reiniciar km de hoy',
+      'Esto borra el km inicial y final cargados hoy. No se puede deshacer. ¿Confirmás?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Reiniciar', style: 'destructive', onPress: async () => {
+            await supabase.from('kilometros').delete().eq('fecha', hoyArgentina());
+            cargar();
+          }
+        }
+      ]
+    );
+  };
+
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
   const onRefresh = () => {
@@ -203,6 +219,26 @@ export default function MisEntregas() {
 
       <Text style={[styles.titulo, styles.tituloSeccion]}>Km recorridos</Text>
 
+      <View style={styles.card}>
+        {cargando ? (
+          <ActivityIndicator size="large" color={colores.acento} />
+        ) : kmFinGuardado != null && kmInicioGuardado != null ? (
+          <>
+            <Text style={styles.numero}>{kmFinGuardado - kmInicioGuardado} km</Text>
+            <Text style={styles.numeroLabel}>recorridos hoy</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.numero}>—</Text>
+            <Text style={styles.numeroLabel}>
+              {kmInicioGuardado == null ? 'todavía no cargaste el km inicial' : 'cargá el km actual para ver el total'}
+            </Text>
+          </>
+        )}
+      </View>
+
+      <Text style={[styles.titulo, styles.tituloSeccion]}>Cargar km</Text>
+
       {kmInicioGuardado == null ? (
         <>
           <Text style={styles.subtitulo}>Cargá el km que marca el tablero al empezar tu horario.</Text>
@@ -241,12 +277,9 @@ export default function MisEntregas() {
             )}
           </TouchableOpacity>
 
-          {kmFinGuardado != null && (
-            <View style={styles.card}>
-              <Text style={styles.numero}>{kmFinGuardado - kmInicioGuardado} km</Text>
-              <Text style={styles.numeroLabel}>recorridos hoy</Text>
-            </View>
-          )}
+          <TouchableOpacity onPress={reiniciarKmHoy}>
+            <Text style={styles.enlacePeligro}>Reiniciar km de hoy</Text>
+          </TouchableOpacity>
         </>
       )}
 
@@ -277,5 +310,6 @@ function crearEstilos(colores: Colores) {
       alignItems: 'center', marginTop: 16,
     },
     botonTexto: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+    enlacePeligro: { color: '#d9534f', fontSize: 13, marginTop: 12, textAlign: 'right' },
   });
 }
