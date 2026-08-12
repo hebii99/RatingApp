@@ -74,6 +74,11 @@ interface Ingreso {
   fecha: string;
 }
 
+interface Kilometro {
+  km_inicio: number;
+  km_fin: number | null;
+}
+
 // Fecha de hoy en Argentina, formato AAAA-MM-DD (para precargar el campo de fecha).
 function hoyArgentina() {
   const ahora = new Date();
@@ -97,6 +102,7 @@ export default function Finanzas() {
   const [diasTrabajados, setDiasTrabajados] = useState(0);
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
+  const [kilometros, setKilometros] = useState<Kilometro[]>([]);
 
   const [categoriaElegida, setCategoriaElegida] = useState<Categoria>('combustible');
   const [monto, setMonto] = useState('');
@@ -111,7 +117,7 @@ export default function Finanzas() {
   const cargar = useCallback(async () => {
     const { inicio, fin } = obtenerLimitesMesArgentina();
 
-    const [resultadoCalificaciones, resultadoGastos, resultadoIngresos] = await Promise.all([
+    const [resultadoCalificaciones, resultadoGastos, resultadoIngresos, resultadoKilometros] = await Promise.all([
       supabase
         .from('calificaciones')
         .select('created_at')
@@ -129,6 +135,11 @@ export default function Finanzas() {
         .gte('fecha', inicio.toISOString().slice(0, 10))
         .lt('fecha', fin.toISOString().slice(0, 10))
         .order('fecha', { ascending: false }),
+      supabase
+        .from('kilometros')
+        .select('km_inicio, km_fin')
+        .gte('fecha', inicio.toISOString().slice(0, 10))
+        .lt('fecha', fin.toISOString().slice(0, 10)),
     ]);
 
     if (!resultadoCalificaciones.error && resultadoCalificaciones.data) {
@@ -150,6 +161,12 @@ export default function Finanzas() {
       console.log('FINANZAS - error al traer ingresos:', resultadoIngresos.error);
     }
 
+    if (!resultadoKilometros.error && resultadoKilometros.data) {
+      setKilometros(resultadoKilometros.data as Kilometro[]);
+    } else if (resultadoKilometros.error) {
+      console.log('FINANZAS - error al traer kilometros:', resultadoKilometros.error);
+    }
+
     setCargando(false);
     setRefrescando(false);
   }, []);
@@ -163,6 +180,9 @@ export default function Finanzas() {
 
   const totalGastado = gastos.reduce((acc, g) => acc + g.monto, 0);
   const totalIngresado = ingresos.reduce((acc, i) => acc + i.monto, 0);
+  const totalKmRecorridos = kilometros.reduce(
+    (acc, k) => acc + (k.km_fin != null ? k.km_fin - k.km_inicio : 0), 0
+  );
 
   const totalesPorCategoria = CATEGORIAS.map((c) => ({
     ...c,
@@ -376,6 +396,10 @@ export default function Finanzas() {
           <View style={[styles.card, styles.cardResumen]}>
             <Text style={styles.numero} numberOfLines={1} adjustsFontSizeToFit>{pedidosTotales}</Text>
             <Text style={styles.numeroLabel}>pedidos entregados</Text>
+          </View>
+          <View style={[styles.card, styles.cardResumen]}>
+            <Text style={styles.numero} numberOfLines={1} adjustsFontSizeToFit>{totalKmRecorridos} km</Text>
+            <Text style={styles.numeroLabel}>recorridos este mes</Text>
           </View>
         </View>
       )}

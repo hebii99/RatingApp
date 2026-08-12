@@ -4,10 +4,13 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View
 } from 'react-native';
 
@@ -33,6 +36,16 @@ function obtenerLimitesHoyArgentina() {
   return { inicio, fin };
 }
 
+// Fecha de hoy en Argentina, formato AAAA-MM-DD (misma fila de `kilometros` durante todo el día).
+function hoyArgentina() {
+  const ahora = new Date();
+  const argentinaAhora = new Date(ahora.getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
+  const anio = argentinaAhora.getUTCFullYear();
+  const mes = String(argentinaAhora.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(argentinaAhora.getUTCDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+}
+
 export default function MisEntregas() {
   const { colores } = useTema();
   const styles = crearEstilos(colores);
@@ -40,6 +53,12 @@ export default function MisEntregas() {
   const [totalPropinas, setTotalPropinas] = useState<number | null>(null);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
+
+  const [kmInicioGuardado, setKmInicioGuardado] = useState<number | null>(null);
+  const [kmFinGuardado, setKmFinGuardado] = useState<number | null>(null);
+  const [kmInicioInput, setKmInicioInput] = useState('');
+  const [kmFinInput, setKmFinInput] = useState('');
+  const [guardandoKm, setGuardandoKm] = useState(false);
 
   const cargar = useCallback(async () => {
     const { inicio, fin } = obtenerLimitesHoyArgentina();
@@ -61,9 +80,79 @@ export default function MisEntregas() {
       setTotalPropinas(suma);
     }
 
+    const { data: kmHoy, error: errorKm } = await supabase
+      .from('kilometros')
+      .select('km_inicio, km_fin')
+      .eq('fecha', hoyArgentina())
+      .maybeSingle();
+
+    if (!errorKm) {
+      setKmInicioGuardado(kmHoy?.km_inicio ?? null);
+      setKmFinGuardado(kmHoy?.km_fin ?? null);
+      setKmFinInput(kmHoy?.km_fin != null ? String(kmHoy.km_fin) : '');
+    } else {
+      console.log('MIS ENTREGAS - error al traer km:', errorKm);
+    }
+
     setCargando(false);
     setRefrescando(false);
   }, []);
+
+  const guardarKmInicio = async () => {
+    const kmNumerico = Number(kmInicioInput.replace(',', '.'));
+
+    if (!kmInicioInput || Number.isNaN(kmNumerico) || kmNumerico < 0) {
+      Alert.alert('Km inválido', 'Ingresá el kilometraje del tablero.');
+      return;
+    }
+
+    setGuardandoKm(true);
+
+    const { error } = await supabase
+      .from('kilometros')
+      .upsert({ km_inicio: kmNumerico, fecha: hoyArgentina() }, { onConflict: 'user_id,fecha' });
+
+    setGuardandoKm(false);
+
+    if (error) {
+      console.log('MIS ENTREGAS - error al guardar km inicio:', error);
+      Alert.alert('No se pudo guardar', 'Intentá de nuevo en un momento.');
+      return;
+    }
+
+    setKmInicioInput('');
+    cargar();
+  };
+
+  const guardarKmFin = async () => {
+    const kmNumerico = Number(kmFinInput.replace(',', '.'));
+
+    if (!kmFinInput || Number.isNaN(kmNumerico) || kmNumerico < 0) {
+      Alert.alert('Km inválido', 'Ingresá el kilometraje del tablero.');
+      return;
+    }
+
+    if (kmInicioGuardado != null && kmNumerico < kmInicioGuardado) {
+      Alert.alert('Km inválido', 'El km actual no puede ser menor al km inicial.');
+      return;
+    }
+
+    setGuardandoKm(true);
+
+    const { error } = await supabase
+      .from('kilometros')
+      .upsert({ km_fin: kmNumerico, fecha: hoyArgentina() }, { onConflict: 'user_id,fecha' });
+
+    setGuardandoKm(false);
+
+    if (error) {
+      console.log('MIS ENTREGAS - error al guardar km fin:', error);
+      Alert.alert('No se pudo guardar', 'Intentá de nuevo en un momento.');
+      return;
+    }
+
+    cargar();
+  };
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
@@ -108,6 +197,55 @@ export default function MisEntregas() {
         )}
       </View>
 
+      <Text style={[styles.titulo, styles.tituloSeccion]}>Km recorridos</Text>
+
+      {kmInicioGuardado == null ? (
+        <>
+          <Text style={styles.subtitulo}>Cargá el km que marca el tablero al empezar tu horario.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Km inicial"
+            placeholderTextColor={colores.textoSecundario}
+            keyboardType="decimal-pad"
+            value={kmInicioInput}
+            onChangeText={setKmInicioInput}
+          />
+          <TouchableOpacity style={styles.boton} onPress={guardarKmInicio} disabled={guardandoKm}>
+            {guardandoKm ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.botonTexto}>Guardar km inicial</Text>
+            )}
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <Text style={styles.subtitulo}>Km inicial de hoy: {kmInicioGuardado}. Actualizá el km actual cuando quieras.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Km actual"
+            placeholderTextColor={colores.textoSecundario}
+            keyboardType="decimal-pad"
+            value={kmFinInput}
+            onChangeText={setKmFinInput}
+          />
+          <TouchableOpacity style={styles.boton} onPress={guardarKmFin} disabled={guardandoKm}>
+            {guardandoKm ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.botonTexto}>{kmFinGuardado == null ? 'Guardar km' : 'Actualizar km'}</Text>
+            )}
+          </TouchableOpacity>
+
+          {kmFinGuardado != null && (
+            <View style={styles.card}>
+              <Text style={styles.numero}>{kmFinGuardado - kmInicioGuardado} km</Text>
+              <Text style={styles.numeroLabel}>recorridos hoy</Text>
+            </View>
+          )}
+        </>
+      )}
+
       <View style={{ height: 60 }} />
     </ScrollView>
   );
@@ -126,5 +264,14 @@ function crearEstilos(colores: Colores) {
     },
     numero: { fontSize: 56, fontWeight: 'bold', color: colores.acento },
     numeroLabel: { fontSize: 14, color: colores.textoSecundario, marginTop: 8 },
+    input: {
+      backgroundColor: colores.tarjeta, borderRadius: 12, padding: 14, marginTop: 4,
+      borderWidth: 1, borderColor: colores.borde, color: colores.texto, fontSize: 15,
+    },
+    boton: {
+      backgroundColor: colores.acento, borderRadius: 12, padding: 16,
+      alignItems: 'center', marginTop: 16,
+    },
+    botonTexto: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
   });
 }
