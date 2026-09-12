@@ -1,4 +1,5 @@
 import { Colores, useTema } from '@/contexts/TemaContext';
+import { consultarConReintento } from '@/lib/consultarConReintento';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,6 +15,19 @@ import {
 
 const POR_PAGINA = 7;
 
+// Saca acentos, pasa todo a minúscula y convierte cualquier signo de
+// puntuación o espacio de más en un solo espacio. Así "Av. Siempre Viva
+// 123, 1D" y "siempre viva    123 1d" quedan como el mismo texto para
+// comparar, sin depender de que el cliente haya escrito bien la dirección.
+function normalizarTexto(texto: string) {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9*]+/g, ' ')
+    .trim();
+}
+
 export default function Historial() {
   const { colores } = useTema();
   const styles = crearEstilos(colores);
@@ -28,10 +42,12 @@ export default function Historial() {
 };
 
   const cargar = async () => {
-  const { data, error } = await supabase
-    .from('calificaciones')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const { data, error } = await consultarConReintento(() =>
+    supabase
+      .from('calificaciones')
+      .select('*')
+      .order('created_at', { ascending: false })
+  );
 
   console.log('HISTORIAL - data:', data?.length, 'error:', error);
 
@@ -66,9 +82,14 @@ export default function Historial() {
 
   const filtradas = calificaciones.filter(c => {
     if (filtroRepetir !== 'Todos' && c.repetir !== filtroRepetir) return false;
-    if (!busqueda) return true;
-    const regex = new RegExp(busqueda.replace(/\*/g, '.*'), 'i');
-    return regex.test(c.direccion);
+    if (!busqueda.trim()) return true;
+
+    // Buscamos en dirección + comentario juntos, por si algo como "d4" quedó
+    // anotado en el comentario y no en la dirección que puso el cliente.
+    const objetivo = normalizarTexto(`${c.direccion} ${c.comentario ?? ''}`);
+    const consulta = normalizarTexto(busqueda).replace(/\*/g, '.*');
+    const regex = new RegExp(consulta, 'i');
+    return regex.test(objetivo);
   });
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
@@ -84,12 +105,13 @@ export default function Historial() {
 
       <TextInput
         style={styles.buscador}
-        placeholder="Buscar dirección..."
+        placeholder="Buscar dirección o comentario..."
         placeholderTextColor={colores.textoSecundario}
         value={busqueda}
         onChangeText={setBusqueda}
       />
 
+      <Text style={styles.etiquetaFiltro}>¿Repetirías?</Text>
       <View style={styles.chipsFiltro}>
         {(['Todos', 'Sí', 'No', 'Me da igual'] as const).map((opcion) => (
           <TouchableOpacity
@@ -188,6 +210,7 @@ function crearEstilos(colores: Colores) {
       marginBottom: 12
     },
     chipsFiltro: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+    etiquetaFiltro: { color: colores.textoSecundario, fontSize: 13, marginBottom: 8 },
     chip: {
       paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20,
       borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.tarjeta,

@@ -1,10 +1,13 @@
 import { Colores, useTema } from '@/contexts/TemaContext';
+import { consultarConReintento } from '@/lib/consultarConReintento';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,32 +20,43 @@ import {
 // Argentina está en UTC-3 todo el año (no tiene horario de verano).
 const OFFSET_ARGENTINA_HORAS = 3;
 
-// Calcula el rango de "hoy" (00:00 a 23:59:59 hora Argentina), pero
-// expresado en los mismos valores que Postgres guarda en `created_at`
-// (que están en UTC, sin marca de zona horaria).
+// A qué hora "arranca" un nuevo día de trabajo. Con turnos que terminan
+// pasada la medianoche (hasta la 1am, por ejemplo), cortar a las 00:00
+// partiría un mismo turno en dos días. Cortando a las 02:00, todo lo que
+// pasa entre las 00:00 y las 02:00 todavía cuenta como parte del día anterior.
+const HORA_CORTE_DIA = 2;
+
+// Calcula el rango del "día de trabajo" en curso (corte a las 02:00 hora
+// Argentina, no a medianoche), expresado en los mismos valores que Postgres
+// guarda en `created_at` (en UTC, sin marca de zona horaria).
 function obtenerLimitesHoyArgentina() {
   const ahora = new Date();
   const argentinaAhora = new Date(ahora.getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
+  // Retrocedemos HORA_CORTE_DIA horas antes de sacar el día calendario: así,
+  // entre las 00:00 y las 02:00 todavía se toma el día anterior.
+  const referencia = new Date(argentinaAhora.getTime() - HORA_CORTE_DIA * 60 * 60 * 1000);
 
-  const anio = argentinaAhora.getUTCFullYear();
-  const mes = argentinaAhora.getUTCMonth();
-  const dia = argentinaAhora.getUTCDate();
+  const anio = referencia.getUTCFullYear();
+  const mes = referencia.getUTCMonth();
+  const dia = referencia.getUTCDate();
 
-  // Medianoche de hoy en Argentina = 03:00 UTC del mismo día.
-  const inicio = new Date(Date.UTC(anio, mes, dia, OFFSET_ARGENTINA_HORAS, 0, 0));
-  // Medianoche de mañana en Argentina = 03:00 UTC del día siguiente.
-  const fin = new Date(Date.UTC(anio, mes, dia + 1, OFFSET_ARGENTINA_HORAS, 0, 0));
+  // 02:00 de hoy en Argentina = 05:00 UTC del mismo día.
+  const inicio = new Date(Date.UTC(anio, mes, dia, OFFSET_ARGENTINA_HORAS + HORA_CORTE_DIA, 0, 0));
+  // 02:00 de mañana en Argentina.
+  const fin = new Date(Date.UTC(anio, mes, dia + 1, OFFSET_ARGENTINA_HORAS + HORA_CORTE_DIA, 0, 0));
 
   return { inicio, fin };
 }
 
-// Fecha de hoy en Argentina, formato AAAA-MM-DD (misma fila de `kilometros` durante todo el día).
+// Fecha del "día de trabajo" en curso, formato AAAA-MM-DD (misma fila de
+// `kilometros` durante todo el turno, con el mismo corte a las 02:00).
 function hoyArgentina() {
   const ahora = new Date();
   const argentinaAhora = new Date(ahora.getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
-  const anio = argentinaAhora.getUTCFullYear();
-  const mes = String(argentinaAhora.getUTCMonth() + 1).padStart(2, '0');
-  const dia = String(argentinaAhora.getUTCDate()).padStart(2, '0');
+  const referencia = new Date(argentinaAhora.getTime() - HORA_CORTE_DIA * 60 * 60 * 1000);
+  const anio = referencia.getUTCFullYear();
+  const mes = String(referencia.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(referencia.getUTCDate()).padStart(2, '0');
   return `${anio}-${mes}-${dia}`;
 }
 
@@ -66,11 +80,13 @@ export default function MisEntregas() {
     // Una sola consulta: traemos el monto_propina de cada calificación de
     // hoy. La cantidad de entregas es la cantidad de filas, y el total de
     // propinas es la suma de esa columna (ignorando las que quedaron null).
-    const { data, error } = await supabase
-      .from('calificaciones')
-      .select('monto_propina')
-      .gte('created_at', inicio.toISOString())
-      .lt('created_at', fin.toISOString());
+    const { data, error } = await consultarConReintento(() =>
+      supabase
+        .from('calificaciones')
+        .select('monto_propina')
+        .gte('created_at', inicio.toISOString())
+        .lt('created_at', fin.toISOString())
+    );
 
     console.log('MIS ENTREGAS - filas:', data?.length, 'error:', error);
 
@@ -80,11 +96,13 @@ export default function MisEntregas() {
       setTotalPropinas(suma);
     }
 
-    const { data: kmHoy, error: errorKm } = await supabase
-      .from('kilometros')
-      .select('km_inicio, km_fin')
-      .eq('fecha', hoyArgentina())
-      .maybeSingle();
+    const { data: kmHoy, error: errorKm } = await consultarConReintento<{ km_inicio: number; km_fin: number | null }>(() =>
+      supabase
+        .from('kilometros')
+        .select('km_inicio, km_fin')
+        .eq('fecha', hoyArgentina())
+        .maybeSingle()
+    );
 
     if (!errorKm) {
       setKmInicioGuardado(kmHoy?.km_inicio ?? null);
@@ -182,14 +200,20 @@ export default function MisEntregas() {
   };
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+    >
     <ScrollView
       style={styles.container}
+      keyboardShouldPersistTaps="handled"
       refreshControl={
         <RefreshControl refreshing={refrescando} onRefresh={onRefresh} tintColor={colores.acento} />
       }
     >
       <Text style={styles.titulo}>Mis entregas</Text>
-      <Text style={styles.subtitulo}>Se reinicia todos los días a las 00:00</Text>
+      <Text style={styles.subtitulo}>Se reinicia todos los días a las 02:00</Text>
 
       <View style={styles.card}>
         {cargando ? (
@@ -283,8 +307,9 @@ export default function MisEntregas() {
         </>
       )}
 
-      <View style={{ height: 60 }} />
+      <View style={{ height: 100 }} />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -293,7 +318,7 @@ function crearEstilos(colores: Colores) {
     container: { flex: 1, backgroundColor: colores.fondo, padding: 20, paddingTop: 60 },
     titulo: { fontSize: 24, fontWeight: 'bold', color: colores.texto, marginBottom: 4 },
     tituloSeccion: { marginTop: 28, fontSize: 18 },
-    subtitulo: { fontSize: 13, color: colores.textoSecundario, marginBottom: 24 },
+    subtitulo: { fontSize: 13, color: colores.textoSecundario, marginBottom: 15 },
     card: {
       backgroundColor: colores.tarjeta, borderRadius: 16, padding: 32,
       alignItems: 'center', justifyContent: 'center',

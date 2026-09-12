@@ -1,4 +1,5 @@
 import { Colores, useTema } from '@/contexts/TemaContext';
+import { consultarConReintento } from '@/lib/consultarConReintento';
 import { supabase } from '@/lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useFocusEffect } from 'expo-router';
@@ -36,14 +37,6 @@ function obtenerLimitesMesArgentina() {
   const fin = new Date(Date.UTC(anio, mes + 1, 1, OFFSET_ARGENTINA_HORAS, 0, 0));
 
   return { inicio, fin };
-}
-
-// A qué día calendario (en Argentina) corresponde un created_at en UTC.
-// Sirve para contar días distintos trabajados sin depender del formato
-// de texto que tiene la columna `fecha` en calificaciones.
-function diaArgentina(fechaUTC: string) {
-  const fecha = new Date(new Date(fechaUTC).getTime() - OFFSET_ARGENTINA_HORAS * 60 * 60 * 1000);
-  return `${fecha.getUTCFullYear()}-${fecha.getUTCMonth()}-${fecha.getUTCDate()}`;
 }
 
 // Redondea a 2 decimales — evita el clásico error de punto flotante de JS
@@ -113,6 +106,8 @@ export default function Finanzas() {
   const [categoriaElegida, setCategoriaElegida] = useState<Categoria>('combustible');
   const [monto, setMonto] = useState('');
   const [nota, setNota] = useState('');
+  const [fechaGasto, setFechaGasto] = useState(hoyArgentina());
+  const [gastoEditandoId, setGastoEditandoId] = useState<string | null>(null);
 
   const [montoIngreso, setMontoIngreso] = useState('');
   const [fechaIngreso, setFechaIngreso] = useState(hoyArgentina());
@@ -124,35 +119,40 @@ export default function Finanzas() {
     const { inicio, fin } = obtenerLimitesMesArgentina();
 
     const [resultadoCalificaciones, resultadoGastos, resultadoIngresos, resultadoKilometros] = await Promise.all([
-      supabase
-        .from('calificaciones')
-        .select('created_at')
-        .gte('created_at', inicio.toISOString())
-        .lt('created_at', fin.toISOString()),
-      supabase
-        .from('gastos')
-        .select('id, categoria, monto, fecha, nota')
-        .gte('fecha', inicio.toISOString().slice(0, 10))
-        .lt('fecha', fin.toISOString().slice(0, 10))
-        .order('fecha', { ascending: false }),
-      supabase
-        .from('ingresos')
-        .select('id, monto, fecha')
-        .gte('fecha', inicio.toISOString().slice(0, 10))
-        .lt('fecha', fin.toISOString().slice(0, 10))
-        .order('fecha', { ascending: false }),
-      supabase
-        .from('kilometros')
-        .select('km_inicio, km_fin')
-        .gte('fecha', inicio.toISOString().slice(0, 10))
-        .lt('fecha', fin.toISOString().slice(0, 10)),
+      consultarConReintento(() =>
+        supabase
+          .from('calificaciones')
+          .select('created_at')
+          .gte('created_at', inicio.toISOString())
+          .lt('created_at', fin.toISOString())
+      ),
+      consultarConReintento(() =>
+        supabase
+          .from('gastos')
+          .select('id, categoria, monto, fecha, nota')
+          .gte('fecha', inicio.toISOString().slice(0, 10))
+          .lt('fecha', fin.toISOString().slice(0, 10))
+          .order('fecha', { ascending: false })
+      ),
+      consultarConReintento(() =>
+        supabase
+          .from('ingresos')
+          .select('id, monto, fecha')
+          .gte('fecha', inicio.toISOString().slice(0, 10))
+          .lt('fecha', fin.toISOString().slice(0, 10))
+          .order('fecha', { ascending: false })
+      ),
+      consultarConReintento(() =>
+        supabase
+          .from('kilometros')
+          .select('km_inicio, km_fin')
+          .gte('fecha', inicio.toISOString().slice(0, 10))
+          .lt('fecha', fin.toISOString().slice(0, 10))
+      ),
     ]);
 
     if (!resultadoCalificaciones.error && resultadoCalificaciones.data) {
-      const filas = resultadoCalificaciones.data;
-      setPedidosTotales(filas.length);
-      const diasDistintos = new Set(filas.map((f) => diaArgentina(f.created_at)));
-      setDiasTrabajados(diasDistintos.size);
+      setPedidosTotales(resultadoCalificaciones.data.length);
     }
 
     if (!resultadoGastos.error && resultadoGastos.data) {
@@ -162,7 +162,10 @@ export default function Finanzas() {
     }
 
     if (!resultadoIngresos.error && resultadoIngresos.data) {
-      setIngresos(resultadoIngresos.data as Ingreso[]);
+      const filasIngresos = resultadoIngresos.data as Ingreso[];
+      setIngresos(filasIngresos);
+      // Días trabajados = días distintos con un ingreso cargado (no calificaciones).
+      setDiasTrabajados(new Set(filasIngresos.map((i) => i.fecha)).size);
     } else if (resultadoIngresos.error) {
       console.log('FINANZAS - error al traer ingresos:', resultadoIngresos.error);
     }
@@ -215,13 +218,23 @@ export default function Finanzas() {
       return;
     }
 
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaGasto)) {
+      Alert.alert('Fecha inválida', 'Usá el formato AAAA-MM-DD.');
+      return;
+    }
+
     setGuardando(true);
 
-    const { error } = await supabase.from('gastos').insert({
+    const datosGasto = {
       categoria: categoriaElegida,
       monto: montoNumerico,
       nota: nota.trim() ? nota.trim() : null,
-    });
+      fecha: fechaGasto,
+    };
+
+    const { error } = gastoEditandoId
+      ? await supabase.from('gastos').update(datosGasto).eq('id', gastoEditandoId)
+      : await supabase.from('gastos').insert(datosGasto);
 
     setGuardando(false);
 
@@ -233,7 +246,25 @@ export default function Finanzas() {
 
     setMonto('');
     setNota('');
+    setFechaGasto(hoyArgentina());
+    setGastoEditandoId(null);
     cargar();
+  };
+
+  // Carga un gasto existente en el formulario para corregirlo antes de volver a guardar.
+  const editarGasto = (g: Gasto) => {
+    setCategoriaElegida(g.categoria);
+    setMonto(String(g.monto));
+    setNota(g.nota ?? '');
+    setFechaGasto(g.fecha);
+    setGastoEditandoId(g.id);
+  };
+
+  const cancelarEdicionGasto = () => {
+    setMonto('');
+    setNota('');
+    setFechaGasto(hoyArgentina());
+    setGastoEditandoId(null);
   };
 
   // Carga el ingreso del día en el formulario para corregirlo antes de volver a guardar.
@@ -474,7 +505,9 @@ export default function Finanzas() {
         </TouchableOpacity>
       )}
 
-      <Text style={[styles.titulo, styles.tituloSeccion]}>Cargar gasto</Text>
+      <Text style={[styles.titulo, styles.tituloSeccion]}>
+        {gastoEditandoId ? 'Editar gasto' : 'Cargar gasto'}
+      </Text>
 
       <View style={styles.chips}>
         {CATEGORIAS.map((c) => (
@@ -497,6 +530,14 @@ export default function Finanzas() {
           </TouchableOpacity>
         ))}
       </View>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Fecha (AAAA-MM-DD)"
+        placeholderTextColor={colores.textoSecundario}
+        value={fechaGasto}
+        onChangeText={setFechaGasto}
+      />
 
       <TextInput
         style={styles.input}
@@ -523,9 +564,15 @@ export default function Finanzas() {
         {guardando ? (
           <ActivityIndicator color="#ffffff" />
         ) : (
-          <Text style={styles.botonTexto}>Guardar gasto</Text>
+          <Text style={styles.botonTexto}>{gastoEditandoId ? 'Actualizar gasto' : 'Guardar gasto'}</Text>
         )}
       </TouchableOpacity>
+
+      {gastoEditandoId && (
+        <TouchableOpacity onPress={cancelarEdicionGasto}>
+          <Text style={styles.enlacePeligro}>Cancelar edición</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.encabezadoSeccion}>
         <Text style={[styles.titulo, styles.tituloSeccion, { marginTop: 0 }]}>Detalle de ingresos</Text>
@@ -567,7 +614,7 @@ export default function Finanzas() {
         <Text style={styles.subtitulo}>Todavía no cargaste gastos este mes.</Text>
       ) : mostrarDetalleGastos ? (
         gastos.map((g) => (
-          <View key={g.id} style={styles.filaGasto}>
+          <TouchableOpacity key={g.id} style={styles.filaGasto} onPress={() => editarGasto(g)}>
             <View style={{ flex: 1 }}>
               <Text style={styles.filaGastoCategoria}>{etiquetaCategoria(g.categoria)}</Text>
               {g.nota ? <Text style={styles.filaGastoNota}>{g.nota}</Text> : null}
@@ -579,7 +626,7 @@ export default function Finanzas() {
                 <Text style={styles.botonEliminarTexto}>✕</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </TouchableOpacity>
         ))
       ) : null}
 
@@ -592,7 +639,7 @@ function crearEstilos(colores: Colores) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colores.fondo, padding: 20, paddingTop: 60 },
     titulo: { fontSize: 24, fontWeight: 'bold', color: colores.texto, marginBottom: 4 },
-    tituloSeccion: { marginTop: 28, fontSize: 18 },
+    tituloSeccion: { marginTop: 17, fontSize: 18 },
     encabezadoSeccion: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28,
     },

@@ -192,7 +192,7 @@ function crearEstilos(colores: Colores) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 24,
+      marginBottom: 0,
     },
     engranajeBoton: {
       paddingHorizontal: 10,
@@ -209,7 +209,7 @@ function crearEstilos(colores: Colores) {
       backgroundColor: colores.tarjeta, color: colores.texto, borderRadius: 8,
       padding: 12, fontSize: 15, borderWidth: 1, borderColor: colores.borde
     },
-    inputMultiline: { height: 80, textAlignVertical: 'top' },
+    inputMultiline: { height: 70, textAlignVertical: 'top' },
     selectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
       paddingHorizontal: 12, paddingVertical: 6,
@@ -222,7 +222,7 @@ function crearEstilos(colores: Colores) {
     estrellaActiva: { color: colores.acento },
     boton: {
       backgroundColor: colores.acento, padding: 16, borderRadius: 10,
-      alignItems: 'center', marginTop: 32
+      alignItems: 'center', marginTop: 12
     },
     botonDesactivado: { backgroundColor: '#666' },
     botonTexto: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
